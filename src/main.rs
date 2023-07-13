@@ -1,38 +1,71 @@
-use serde_json::Value;
 use std::process::{Command, Stdio};
 
+use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
+
 fn main() {
-    let output = Command::new("cargo")
-        .arg("metadata")
-        // Tell the OS to record the command's output
-        .stdout(Stdio::piped())
-        // execute the command, wait for it to complete, then capture the output
-        .output()
-        // Blow up if the OS was unable to start the program
-        .unwrap();
-
-    // extract the raw bytes that we captured and interpret them as a string
-    let stdout = String::from_utf8(output.stdout).unwrap();
-
-    let parsed: Value = read_json(&stdout);
-
-    let dependencies: Value = parsed["packages"][0]["dependencies"].clone();
-
-    let mut no_more_deps = false;
-
-    let mut i = 0;
-
-    while !no_more_deps {
-        if let Some(obj) = dependencies.get(i) {
-            println!("{}", obj["name"]);
-            i += 1;
-        } else {
-            no_more_deps = true;
-        }
-    }
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_systems(Startup, setup)
+        .run();
 }
 
-fn read_json(raw_json: &str) -> Value {
-    let parsed: Value = serde_json::from_str(raw_json).unwrap();
-    parsed
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    commands.spawn(Camera2dBundle::default());
+    let output = Command::new("cargo")
+        .arg("tree")
+        .arg("--prefix=depth")
+        .stdout(Stdio::piped())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut vertical_height = vec![0];
+
+    for (i, line) in stdout.lines().enumerate() {
+        let mut found_char = false;
+
+        let depth = line
+            .chars()
+            .filter(|ch| {
+                if ch.is_numeric() && !found_char {
+                    true
+                } else if !ch.is_numeric() && !found_char {
+                    found_char = true;
+                    false
+                } else {
+                    false
+                }
+            })
+            .collect::<String>()
+            .parse::<i32>()
+            .unwrap_or(1);
+
+        let y_cor = match vertical_height.get_mut(depth as usize) {
+            Some(val) => {
+                *val += 1;
+                *val - 1
+            }
+            None => {
+                vertical_height.push(1);
+                0
+            }
+        };
+
+        String::from( "sdfasdf" )
+
+        commands.spawn(MaterialMesh2dBundle {
+            mesh: meshes.add(shape::Circle::new(2.).into()).into(),
+            material: materials.add(ColorMaterial::from(Color::PURPLE)),
+            transform: Transform::from_translation(Vec3::new(
+                -150. + depth as f32 * 20.,
+                -400. + y_cor as f32 * 6.,
+                0.,
+            )),
+            ..default()
+        });
+    }
 }
